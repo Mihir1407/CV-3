@@ -7,77 +7,60 @@
 #include <numeric>
 #include "kmeans.h"
 #include "objectRecogFunctions.h"
-#include <map>
+#include <corecrt_math_defines.h>
 
-cv::Mat computeFeaturesAndDraw(const cv::Mat& src) {
-    // Assuming src is a cleaned binary image from applyMorphologicalFilter
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(src.clone(), contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+// int main()
+// {
+//     cv::Mat frame, output;
+//     int minRegionSize = 500;
+//     frame = cv::imread("D:/CV/Project3/Proj03Examples/img3P3.png");
+//     if (frame.empty())
+//     {
+//         std::cout << "Could not open or find the image" << std::endl;
+//         return -1;
+//     }
+//     cv::Mat cleaned = applyMorphologicalFilter(frame); // Apply the morphological filter
 
-    cv::Mat output;
-    cv::cvtColor(src, output, cv::COLOR_GRAY2BGR); // Convert binary to BGR for visualization
+//     findRegions(cleaned, output, frame, minRegionSize); // Find and analyze regions
 
-    for (size_t i = 0; i < contours.size(); i++) {
-        double area = cv::contourArea(contours[i]);
-        if (area < 100) // Filter out small areas
-            continue;
+//     cv::imshow("Display window", output);
 
-        // Compute moments for each contour
-        cv::Moments m = cv::moments(contours[i]);
-        double cX = m.m10 / m.m00; // Centroid X
-        double cY = m.m01 / m.m00; // Centroid Y
+//     while (true)
+//     {
+//         char key = cv::waitKey(0);
+//         if (key == 'q')
+//         {
+//             break;
+//         }
+//     }
+//     return 0;
+// }
 
-        // Compute the angle of the axis of least inertia
-        double angle = 0.5 * atan2(2 * m.mu11, m.mu20 - m.mu02) * (180 / CV_PI);
-
-        // Compute the oriented bounding box
-        cv::RotatedRect rotatedRect = cv::minAreaRect(contours[i]);
-
-        // Draw the centroid
-        cv::circle(output, cv::Point(static_cast<int>(cX), static_cast<int>(cY)), 5, cv::Scalar(0, 255, 0), -1);
-
-        // Draw the oriented bounding box
-        cv::Point2f rectPoints[4];
-        rotatedRect.points(rectPoints);
-        for (int j = 0; j < 4; j++) {
-            cv::line(output, rectPoints[j], rectPoints[(j+1) % 4], cv::Scalar(0, 0, 255), 2);
-        }
-
-        // Optionally display the angle or other features on the video output
-        std::string text = "Angle: " + std::to_string(angle);
-        cv::putText(output, text, cv::Point(static_cast<int>(cX) - 50, static_cast<int>(cY) - 20),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 2);
-    }
-
-    return output;
-}
-
-// Main processing function adapted for feature computation and drawing
-cv::Mat processFrameForFeatures(const cv::Mat& frame) {
-    cv::Mat cleaned = applyMorphologicalFilter(frame);
-    cv::Mat featuresImage = computeFeaturesAndDraw(cleaned);
-    return featuresImage;
-}
-
-int main() {
-    cv::VideoCapture cap(0); // Change to the correct video source if needed
-    if (!cap.isOpened()) {
-        std::cerr << "Error opening video stream or file" << std::endl;
+int main()
+{
+    cv::VideoCapture cap(0); // Open the default camera
+    if (!cap.isOpened())
+    { // Check if we succeeded
+        std::cerr << "Error opening video capture" << std::endl;
         return -1;
     }
 
-    while(true) {
-        cv::Mat frame, processedFrame;
-        cap >> frame; // Capture frame-by-frame
-        if (frame.empty()) break;
+    cv::Mat frame, output;
+    int minRegionSize = 500; // Minimum size of regions to consider
 
-        // Process the frame to compute and display features for each major region
-        processedFrame = processFrameForFeatures(frame);
+    while (true)
+    {
+        cap >> frame; // Capture a new frame
+        if (frame.empty())
+            break; // Check for end of video
 
-        // Display the resulting frame with features
-        cv::imshow("Features Display", processedFrame);
-        if (cv::waitKey(30) >= 0) break; // Press any key to exit
+        cv::Mat cleaned = applyMorphologicalFilter(frame); // Apply the morphological filter
+
+        findRegions(cleaned, output, frame, minRegionSize); // Find and analyze regions
+
+        cv::imshow("Output", output); // Display the output image with computed features
+        if (cv::waitKey(30) >= 0)
+            break; // Press any key to exit
     }
-
     return 0;
 }
