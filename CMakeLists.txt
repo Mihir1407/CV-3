@@ -17,6 +17,12 @@ target_link_libraries(computeFeatures ${OpenCV_LIBS})
 add_executable(classifyImages src/classifyImages.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
 target_link_libraries(classifyImages ${OpenCV_LIBS})
 
+add_executable(classifyImagesKNN src/classifyImagesKNN.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
+target_link_libraries(classifyImagesKNN ${OpenCV_LIBS})
+
+add_executable(classifyImagesDNN src/classifyImagesDNN.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
+target_link_libraries(classifyImagesDNN ${OpenCV_LIBS})
+
 add_executable(segmentImages src/segmentImages.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
 target_link_libraries(segmentImages ${OpenCV_LIBS})
 
@@ -31,6 +37,9 @@ target_link_libraries(threshold ${OpenCV_LIBS})
 
 add_executable(trainingData src/trainingData.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
 target_link_libraries(trainingData ${OpenCV_LIBS})
+
+add_executable(trainingDataDNN src/trainingDataDNN.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
+target_link_libraries(trainingDataDNN ${OpenCV_LIBS})
 
 add_executable(ImgDisplay src/imgDisplay.cpp)
 target_link_libraries(ImgDisplay ${OpenCV_LIBS})

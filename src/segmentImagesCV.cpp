@@ -1,3 +1,10 @@
+// segmentImagesCV.cpp
+// Author: Mihir Chitre, Aditya Gurnani
+// Date: 02/24/2024
+// Description: This program captures video from a webcam, applies morphological filtering, segments the image into multiple colored regions
+//              and displays region maps in a window. This program uses an opencv function of connected components
+//              to segment the image.
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -8,8 +15,13 @@
 #include "kmeans.h"
 #include "objectRecogFunctions.h"
 
+/*
+   Function: main
+   Purpose: Entry point of the program.
+   Returns: 0 on successful execution, -1 otherwise.
+*/
 int main() {
-    cv::VideoCapture cap(0); // Change to the correct video source if needed
+    cv::VideoCapture cap(0); 
     if (!cap.isOpened()) {
         std::cerr << "Error opening video stream or file" << std::endl;
         return -1;
@@ -17,17 +29,15 @@ int main() {
 
     while(true) {
         cv::Mat frame, processedFrame, cleanedFrame, result;
-        cap >> frame; // Capture frame-by-frame
+        cap >> frame; 
         if (frame.empty()) break;
 
-        // Process the frame to apply morphological filtering and display region maps
         cleanedFrame = applyMorphologicalFilter(frame);
 
         result = displayConnectedComponents(cleanedFrame, 100);
 
-        // Display the resulting frame
         cv::imshow("Region Maps", result);
-        if (cv::waitKey(30) >= 0) break; // Press any key to exit
+        if (cv::waitKey(30) >= 0) break; 
     }
 
     return 0;

@@ -669,12 +669,18 @@ void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::M
     }
 }
 
-// Function to load feature vectors and their labels from the CSV file
-std::vector<std::pair<std::vector<double>, std::string>> loadFeatureVectorsAndLabels()
+// Function to load feature vectors and their labels from a CSV file
+std::vector<std::pair<std::vector<double>, std::string>> loadFeatureVectorsAndLabels(const std::string &fileName)
 {
     std::vector<std::pair<std::vector<double>, std::string>> database;
-    std::ifstream file("feature_vectors.csv");
+    std::ifstream file(fileName); // Use the fileName argument to open the file
     std::string line;
+
+    if (!file.is_open())
+    {
+        std::cerr << "Error opening file: " << fileName << std::endl;
+        return database; // Return an empty database if the file cannot be opened
+    }
 
     while (std::getline(file, line))
     {
@@ -713,37 +719,48 @@ std::vector<double> convertFeatureMapToVector(const std::unordered_map<std::stri
     return featureVector;
 }
 
-std::vector<double> calculateStandardDeviations(const std::vector<std::pair<std::vector<double>, std::string>>& database) {
-    if (database.empty()) return {};
+std::vector<double> calculateStandardDeviations(const std::vector<std::pair<std::vector<double>, std::string>> &database)
+{
+    if (database.empty())
+        return {};
 
     size_t numFeatures = database[0].first.size();
     std::vector<double> means(numFeatures, 0.0);
     std::vector<double> stdevs(numFeatures, 0.0);
 
     // Calculate means
-    for (const auto& entry : database) {
-        for (size_t i = 0; i < numFeatures; ++i) {
+    for (const auto &entry : database)
+    {
+        for (size_t i = 0; i < numFeatures; ++i)
+        {
             means[i] += entry.first[i];
         }
     }
-    for (double& mean : means) mean /= database.size();
+    for (double &mean : means)
+        mean /= database.size();
 
     // Calculate standard deviations
-    for (const auto& entry : database) {
-        for (size_t i = 0; i < numFeatures; ++i) {
+    for (const auto &entry : database)
+    {
+        for (size_t i = 0; i < numFeatures; ++i)
+        {
             stdevs[i] += std::pow(entry.first[i] - means[i], 2);
         }
     }
-    for (double& stdev : stdevs) stdev = std::sqrt(stdev / database.size());
+    for (double &stdev : stdevs)
+        stdev = std::sqrt(stdev / database.size());
 
     return stdevs;
 }
 
 // Modified distance function to include standard deviation scaling
-double scaledEuclideanDistance(const std::vector<double>& vec1, const std::vector<double>& vec2, const std::vector<double>& stdevs) {
+double scaledEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2, const std::vector<double> &stdevs)
+{
     double distance = 0.0;
-    for (size_t i = 0; i < vec1.size(); ++i) {
-        if (stdevs[i] > 0) { // Prevent division by zero
+    for (size_t i = 0; i < vec1.size(); ++i)
+    {
+        if (stdevs[i] > 0)
+        { // Prevent division by zero
             double scaledDiff = (vec1[i] - vec2[i]) / stdevs[i];
             distance += scaledDiff * scaledDiff;
         }
@@ -751,10 +768,164 @@ double scaledEuclideanDistance(const std::vector<double>& vec1, const std::vecto
     return std::sqrt(distance);
 }
 
-void classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
+std::string classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
 {
     // Load the database of feature vectors and labels
-    auto database = loadFeatureVectorsAndLabels();
+    auto database = loadFeatureVectorsAndLabels("feature_vectors.csv");
+    auto stdevs = calculateStandardDeviations(database);
+    // Specify the order of features
+    std::vector<std::string> orderedFeatureKeys = {
+        "area", "percentFilled", "aspectRatio", "circularity", "compactness",
+        "HuMoment 0", "HuMoment 1", "HuMoment 2", "HuMoment 3",
+        "HuMoment 4", "HuMoment 5", "HuMoment 6"};
+
+    cv::Mat invertedImg;
+    cv::bitwise_not(binaryImage, invertedImg);
+
+    // Perform connected components analysis on the inverted image
+    cv::Mat labels, stats, centroids;
+    int nLabels = cv::connectedComponentsWithStats(invertedImg, labels, stats, centroids, 8, CV_32S);
+
+    output = cv::Mat::zeros(originalImg.size(), CV_8UC3);
+
+    cv::Point imageCenter = cv::Point(originalImg.cols / 2, originalImg.rows / 2);
+
+    int centerAreaSize = std::min(originalImg.cols, originalImg.rows) / 3;
+    cv::Rect centerArea(imageCenter.x - centerAreaSize, imageCenter.y - centerAreaSize, centerAreaSize * 2, centerAreaSize * 2);
+    // cv::rectangle(originalImg, centerArea, cv::Scalar(255, 255, 0), 2);
+
+    std::vector<int> objectsLabel;
+    double minDistanceToCenter = std::numeric_limits<double>::max();
+    // Placeholder for the nearest neighbor search
+    std::string closestLabel = "Unknown";
+    // Iterate through all regions to find the centermost one
+    for (int i = 1; i < nLabels; i++)
+    {
+        int area = stats.at<int>(i, cv::CC_STAT_AREA);
+
+        // Only consider regions larger than the minimum size
+        if (area > minRegionSize)
+        {
+            cv::Point centroid = cv::Point(static_cast<int>(centroids.at<double>(i, 0)),
+                                           static_cast<int>(centroids.at<double>(i, 1)));
+
+            // Compute the Euclidean distance from the centroid to the image center
+            double distance = cv::norm(centroid - imageCenter);
+
+            if (centerArea.contains(centroid))
+            {
+                objectsLabel.push_back(i);
+            }
+        }
+    }
+
+    std::vector<cv::Vec3b> colors(objectsLabel.size() + 1);
+
+    for (size_t i = 0; i < objectsLabel.size(); i++)
+    {
+        colors[i] = cv::Vec3b(rand() & 255, rand() & 255, rand() & 255);
+    }
+
+    // Draw only the centermost region if one was found
+    for (size_t c = 0; c < objectsLabel.size(); c++)
+    {
+        // Assuming computeFeatures is correctly adapted for cv:: namespace as well.
+        int area = stats.at<int>(objectsLabel[c], cv::CC_STAT_AREA);
+        int x = stats.at<int>(objectsLabel[c], cv::CC_STAT_LEFT);
+        int y = stats.at<int>(objectsLabel[c], cv::CC_STAT_TOP);
+        int width = stats.at<int>(objectsLabel[c], cv::CC_STAT_WIDTH);
+        int height = stats.at<int>(objectsLabel[c], cv::CC_STAT_HEIGHT);
+
+        cv::Mat mask = cv::Mat::zeros(originalImg.size(), CV_8UC1);
+        for (int i = 0; i < mask.rows; i++)
+        {
+            uchar *maskptr = mask.ptr<uchar>(i);
+            for (int j = 0; j < mask.cols; j++)
+            {
+                if (labels.at<int>(i, j) == objectsLabel[c])
+                {
+                    maskptr[j] = 255;
+                }
+            }
+        }
+
+        auto featureMap = computeFeatureVector(mask, area, width, height, labels, objectsLabel[c]);
+        auto featureVector = convertFeatureMapToVector(featureMap, orderedFeatureKeys);
+        drawFeatures(originalImg, featureMap, mask, x, y);
+
+        double closestDistance = std::numeric_limits<double>::max();
+
+        for (const auto &entry : database)
+        {
+            double distance = scaledEuclideanDistance(featureVector, entry.first, stdevs);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                closestLabel = entry.second;
+            }
+        }
+
+        // Label the detected object on the output image
+        // Assume x and y are the coordinates where you want to put the label
+        cv::putText(originalImg, closestLabel, cv::Point(x, y - 80), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+        // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
+        for (int i = 0; i < originalImg.rows; i++)
+        {
+            for (int j = 0; j < originalImg.cols; j++)
+            {
+                if (labels.at<int>(i, j) == objectsLabel[c])
+                {
+                    output.at<cv::Vec3b>(i, j) = colors[c];
+                }
+            }
+        }
+    }
+    return closestLabel;
+}
+
+std::string classifyWithKNN(const std::vector<double> &testVector,
+                            const std::vector<std::pair<std::vector<double>, std::string>> &database,
+                            int K,
+                            const std::vector<double> &stdevs)
+{
+    // Calculate distances
+    std::vector<std::pair<double, std::string>> labeledDistances;
+    for (const auto &entry : database)
+    {
+        double distance = scaledEuclideanDistance(testVector, entry.first, stdevs);
+        labeledDistances.push_back({distance, entry.second});
+    }
+
+    // Sort by distance
+    std::sort(labeledDistances.begin(), labeledDistances.end());
+
+    // Aggregate distances by class, up to K nearest neighbors
+    std::map<std::string, std::vector<double>> classDistances;
+    for (int i = 0; i < K && i < labeledDistances.size(); ++i)
+    {
+        classDistances[labeledDistances[i].second].push_back(labeledDistances[i].first);
+    }
+
+    // Calculate average distance for each class and find the class with the smallest average distance
+    std::string closestClass = "";
+    double smallestAvgDistance = std::numeric_limits<double>::max();
+    for (const auto &pair : classDistances)
+    {
+        double avgDistance = std::accumulate(pair.second.begin(), pair.second.end(), 0.0) / pair.second.size();
+        if (avgDistance < smallestAvgDistance)
+        {
+            smallestAvgDistance = avgDistance;
+            closestClass = pair.first;
+        }
+    }
+
+    return closestClass;
+}
+
+void classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
+{
+    // Load the database of feature vectors and labels
+    auto database = loadFeatureVectorsAndLabels("feature_vectors.csv");
     auto stdevs = calculateStandardDeviations(database);
     // Specify the order of features
     std::vector<std::string> orderedFeatureKeys = {
@@ -835,22 +1006,11 @@ void classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Ma
         auto featureVector = convertFeatureMapToVector(featureMap, orderedFeatureKeys);
         drawFeatures(originalImg, featureMap, mask, x, y);
         // Placeholder for the nearest neighbor search
-        std::string closestLabel = "Unknown";
-        double closestDistance = std::numeric_limits<double>::max();
-
-        for (const auto &entry : database)
-        {
-            double distance = scaledEuclideanDistance(featureVector, entry.first, stdevs);
-            if (distance < closestDistance)
-            {
-                closestDistance = distance;
-                closestLabel = entry.second;
-            }
-        }
-
+        // Using classifyWithKNN to determine the label of the current region
+        std::string label = classifyWithKNN(featureVector, database, 3, stdevs);
         // Label the detected object on the output image
         // Assume x and y are the coordinates where you want to put the label
-        cv::putText(originalImg, closestLabel, cv::Point(x, y - 80), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
+        cv::putText(originalImg, label, cv::Point(x, y - 80), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
         // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
         for (int i = 0; i < originalImg.rows; i++)
         {
@@ -863,4 +1023,42 @@ void classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Ma
             }
         }
     }
+}
+
+int getEmbedding(cv::Mat &src, cv::Mat &embedding, cv::Rect &bbox, cv::dnn::Net &net, int debug)
+{
+    const int ORNet_size = 128;
+    cv::Mat padImg;
+    cv::Mat blob;
+
+    cv::Mat roiImg = src(bbox);
+    int top = bbox.height > 128 ? 10 : (128 - bbox.height) / 2 + 10;
+    int left = bbox.width > 128 ? 10 : (128 - bbox.width) / 2 + 10;
+    int bottom = top;
+    int right = left;
+
+    cv::copyMakeBorder(roiImg, padImg, top, bottom, left, right, cv::BORDER_CONSTANT, 0);
+    cv::resize(padImg, padImg, cv::Size(128, 128));
+
+    cv::dnn::blobFromImage(src,                              // input image
+                           blob,                             // output array
+                           (1.0 / 255.0) / 0.5,              // scale factor
+                           cv::Size(ORNet_size, ORNet_size), // resize the image to this
+                           128,                              // subtract mean prior to scaling
+                           false,                            // input is a single channel image
+                           true,                             // center crop after scaling short side to size
+                           CV_32F);                          // output depth/type
+
+    net.setInput(blob);
+    embedding = net.forward("onnx_node!/fc1/Gemm");
+
+    if (debug)
+    {
+        cv::imshow("pad image", padImg);
+        std::cout << embedding << std::endl;
+        std::cout << "--Press any key to continue--";
+        cv::waitKey(0);
+    }
+
+    return (0);
 }

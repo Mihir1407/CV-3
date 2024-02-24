@@ -1,3 +1,10 @@
+// trainingData.cpp
+// Author: Mihir Chitre, Aditya Gurnani
+// Date: 02/24/2024
+// Description: This program captures video from a webcam, processes each frame to identify regions, computes the feature vectors for biggest central region
+//              and optionally enters a training mode to store feature vectors to a CSV file.
+
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -11,46 +18,51 @@
 #include <fstream>
 #include <iostream>
 
+/*
+   Function: main
+   Purpose: Entry point of the program.
+   Returns: 0 on successful execution, -1 otherwise.
+*/
 int main()
 {
-    cv::VideoCapture cap(0); // Open the default camera
+    cv::VideoCapture cap(0); 
     if (!cap.isOpened())
-    { // Check if we succeeded
+    { 
         std::cerr << "Error opening video capture" << std::endl;
         return -1;
     }
 
     cv::Mat frame, output;
-    int minRegionSize = 500; // Minimum size of regions to consider
+    int minRegionSize = 500; 
     bool trainingMode = false; // Flag to indicate if training mode is active
 
     while (true)
     {
-        cap >> frame; // Capture a new frame
+        cap >> frame; 
         if (frame.empty())
-            break; // Check for end of video
+            break; 
 
-        cv::Mat cleaned = applyMorphologicalFilter(frame); // Apply the morphological filter
+        cv::Mat cleaned = applyMorphologicalFilter(frame);
 
         int key = cv::waitKey(30);
-        if (key == 'n') // If 'n' is pressed, activate training mode for the next frame
+        if (key == 'n') 
         {
             trainingMode = true;
         }
 
         if (trainingMode)
         {
-            findRegionsAndStoreToCsv(cleaned, output, frame, minRegionSize); // Process the frame in training mode
-            trainingMode = false; // Reset training mode so that it processes only one frame
+            findRegionsAndStoreToCsv(cleaned, output, frame, minRegionSize); 
+            trainingMode = false; 
         }
         else
         {
-            findRegions(cleaned, output, frame, minRegionSize); // Normal processing
+            findRegions(cleaned, output, frame, minRegionSize); 
         }
 
-        cv::imshow("Output", output); // Display the output image with computed features
+        cv::imshow("Output", output); 
         if (key >= 0 && key != 'n')
-            break; // Press any key except 'n' to exit
+            break; 
     }
     return 0;
 }

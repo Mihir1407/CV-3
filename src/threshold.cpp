@@ -1,3 +1,9 @@
+// threshold.cpp
+// author: Mihir Chitre, Aditya Gurnani
+// date: 02/24/2024
+// description: This program captures video from a webcam, processes each frame to obtain a thresholded version,
+//              and displays the thresholded video in a window.
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -8,6 +14,11 @@
 #include "kmeans.h"
 #include "objectRecogFunctions.h"
 
+/*
+   Function: main
+   Purpose: Entry point of the program.
+   Returns: 0 on successful execution, -1 otherwise.
+*/
 int main() {
     cv::VideoCapture cap(0); 
     if (!cap.isOpened()) {
@@ -17,17 +28,15 @@ int main() {
     cv::namedWindow("Thresholded Video", cv::WINDOW_AUTOSIZE);
     while (true) {
         cv::Mat frame, processedFrame;
-        cap >> frame; // Get a new frame from camera
+        cap >> frame; 
         
         if (frame.empty())
             break;
 
-        // Process the frame
         processedFrame = processFrameForThreshold(frame);
 
-        // Show the result
         cv::imshow("Thresholded Video", processedFrame);
-        if (cv::waitKey(30) >= 0) break; // Wait for a key press
+        if (cv::waitKey(30) >= 0) break; 
     }
 
     return 0;
