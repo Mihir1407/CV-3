@@ -13,4 +13,6 @@ void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalI
 
 void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize);
 
+void classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize);
+
 #endif

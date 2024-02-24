@@ -14,6 +14,9 @@ find_package(OpenCV REQUIRED)
 add_executable(computeFeatures src/computeFeatures.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
 target_link_libraries(computeFeatures ${OpenCV_LIBS})
 
+add_executable(classifyImages src/classifyImages.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
+target_link_libraries(classifyImages ${OpenCV_LIBS})
+
 add_executable(segmentImages src/segmentImages.cpp src/kmeans.cpp src/objectRecogFunctions.cpp)
 target_link_libraries(segmentImages ${OpenCV_LIBS})
 

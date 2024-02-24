@@ -453,33 +453,6 @@ void drawFeatures(cv::Mat &output, const std::unordered_map<std::string, double>
     drawAxisOfLeastCentralMoment(mask, output);
 }
 
-void saveFeatureVectorToCSV(const std::unordered_map<std::string, double>& featureMap, const std::string& label) {
-    std::ofstream file("feature_vectors.csv", std::ios::app); // Open in append mode
-    if (file.is_open()) {
-        // Define the order of features as they should appear in the CSV
-        std::vector<std::string> orderedFeatureKeys = {
-            "area", "percentFilled", "aspectRatio", "circularity", "compactness",
-            "HuMoment 0", "HuMoment 1", "HuMoment 2", "HuMoment 3",
-            "HuMoment 4", "HuMoment 5", "HuMoment 6"
-        };
-
-        file << label; // Write label first
-
-        for (const auto& key : orderedFeatureKeys) {
-            if (featureMap.find(key) != featureMap.end()) { // Check if the key exists in the map
-                file << "," << featureMap.at(key); // Write feature value preceded by comma
-            } else {
-                file << ","; // If the feature does not exist, write a placeholder (empty value)
-            }
-        }
-
-        file << "\n"; // End of line
-        file.close();
-    } else {
-        std::cerr << "Unable to open file for writing." << std::endl;
-    }
-}
-
 void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
 {
     cv::Mat invertedImg;
@@ -567,6 +540,40 @@ void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalI
     }
 }
 
+void saveFeatureVectorToCSV(const std::unordered_map<std::string, double> &featureMap, const std::string &label)
+{
+    std::ofstream file("feature_vectors.csv", std::ios::app); // Open in append mode
+    if (file.is_open())
+    {
+        // Define the order of features as they should appear in the CSV
+        std::vector<std::string> orderedFeatureKeys = {
+            "area", "percentFilled", "aspectRatio", "circularity", "compactness",
+            "HuMoment 0", "HuMoment 1", "HuMoment 2", "HuMoment 3",
+            "HuMoment 4", "HuMoment 5", "HuMoment 6"};
+
+        file << label; // Write label first
+
+        for (const auto &key : orderedFeatureKeys)
+        {
+            if (featureMap.find(key) != featureMap.end())
+            {                                      // Check if the key exists in the map
+                file << "," << featureMap.at(key); // Write feature value preceded by comma
+            }
+            else
+            {
+                file << ","; // If the feature does not exist, write a placeholder (empty value)
+            }
+        }
+
+        file << "\n"; // End of line
+        file.close();
+    }
+    else
+    {
+        std::cerr << "Unable to open file for writing." << std::endl;
+    }
+}
+
 void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
 {
     cv::Mat invertedImg;
@@ -648,6 +655,202 @@ void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::M
         // Save the feature vector and label to CSV
         saveFeatureVectorToCSV(featureMap, label);
         drawFeatures(output, featureMap, mask, x, y);
+        // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
+        for (int i = 0; i < originalImg.rows; i++)
+        {
+            for (int j = 0; j < originalImg.cols; j++)
+            {
+                if (labels.at<int>(i, j) == objectsLabel[c])
+                {
+                    output.at<cv::Vec3b>(i, j) = colors[c];
+                }
+            }
+        }
+    }
+}
+
+// Function to load feature vectors and their labels from the CSV file
+std::vector<std::pair<std::vector<double>, std::string>> loadFeatureVectorsAndLabels()
+{
+    std::vector<std::pair<std::vector<double>, std::string>> database;
+    std::ifstream file("feature_vectors.csv");
+    std::string line;
+
+    while (std::getline(file, line))
+    {
+        std::istringstream iss(line);
+        std::string label;
+        std::getline(iss, label, ','); // First entry is the label
+
+        std::vector<double> features;
+        std::string value;
+        while (std::getline(iss, value, ','))
+        {
+            features.push_back(std::stod(value));
+        }
+
+        database.push_back({features, label});
+    }
+
+    return database;
+}
+
+// Helper function to convert featureMap to vector<double> in the specified order
+std::vector<double> convertFeatureMapToVector(const std::unordered_map<std::string, double> &featureMap, const std::vector<std::string> &orderedFeatureKeys)
+{
+    std::vector<double> featureVector;
+    for (const auto &key : orderedFeatureKeys)
+    {
+        if (featureMap.find(key) != featureMap.end())
+        {
+            featureVector.push_back(featureMap.at(key));
+        }
+        else
+        {
+            featureVector.push_back(0.0); // Consider how to handle missing values appropriately
+        }
+    }
+    return featureVector;
+}
+
+std::vector<double> calculateStandardDeviations(const std::vector<std::pair<std::vector<double>, std::string>>& database) {
+    if (database.empty()) return {};
+
+    size_t numFeatures = database[0].first.size();
+    std::vector<double> means(numFeatures, 0.0);
+    std::vector<double> stdevs(numFeatures, 0.0);
+
+    // Calculate means
+    for (const auto& entry : database) {
+        for (size_t i = 0; i < numFeatures; ++i) {
+            means[i] += entry.first[i];
+        }
+    }
+    for (double& mean : means) mean /= database.size();
+
+    // Calculate standard deviations
+    for (const auto& entry : database) {
+        for (size_t i = 0; i < numFeatures; ++i) {
+            stdevs[i] += std::pow(entry.first[i] - means[i], 2);
+        }
+    }
+    for (double& stdev : stdevs) stdev = std::sqrt(stdev / database.size());
+
+    return stdevs;
+}
+
+// Modified distance function to include standard deviation scaling
+double scaledEuclideanDistance(const std::vector<double>& vec1, const std::vector<double>& vec2, const std::vector<double>& stdevs) {
+    double distance = 0.0;
+    for (size_t i = 0; i < vec1.size(); ++i) {
+        if (stdevs[i] > 0) { // Prevent division by zero
+            double scaledDiff = (vec1[i] - vec2[i]) / stdevs[i];
+            distance += scaledDiff * scaledDiff;
+        }
+    }
+    return std::sqrt(distance);
+}
+
+void classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
+{
+    // Load the database of feature vectors and labels
+    auto database = loadFeatureVectorsAndLabels();
+    auto stdevs = calculateStandardDeviations(database);
+    // Specify the order of features
+    std::vector<std::string> orderedFeatureKeys = {
+        "area", "percentFilled", "aspectRatio", "circularity", "compactness",
+        "HuMoment 0", "HuMoment 1", "HuMoment 2", "HuMoment 3",
+        "HuMoment 4", "HuMoment 5", "HuMoment 6"};
+
+    cv::Mat invertedImg;
+    cv::bitwise_not(binaryImage, invertedImg);
+
+    // Perform connected components analysis on the inverted image
+    cv::Mat labels, stats, centroids;
+    int nLabels = cv::connectedComponentsWithStats(invertedImg, labels, stats, centroids, 8, CV_32S);
+
+    output = cv::Mat::zeros(originalImg.size(), CV_8UC3);
+
+    cv::Point imageCenter = cv::Point(originalImg.cols / 2, originalImg.rows / 2);
+
+    int centerAreaSize = std::min(originalImg.cols, originalImg.rows) / 3;
+    cv::Rect centerArea(imageCenter.x - centerAreaSize, imageCenter.y - centerAreaSize, centerAreaSize * 2, centerAreaSize * 2);
+    // cv::rectangle(originalImg, centerArea, cv::Scalar(255, 255, 0), 2);
+
+    std::vector<int> objectsLabel;
+    double minDistanceToCenter = std::numeric_limits<double>::max();
+
+    // Iterate through all regions to find the centermost one
+    for (int i = 1; i < nLabels; i++)
+    {
+        int area = stats.at<int>(i, cv::CC_STAT_AREA);
+
+        // Only consider regions larger than the minimum size
+        if (area > minRegionSize)
+        {
+            cv::Point centroid = cv::Point(static_cast<int>(centroids.at<double>(i, 0)),
+                                           static_cast<int>(centroids.at<double>(i, 1)));
+
+            // Compute the Euclidean distance from the centroid to the image center
+            double distance = cv::norm(centroid - imageCenter);
+
+            if (centerArea.contains(centroid))
+            {
+                objectsLabel.push_back(i);
+            }
+        }
+    }
+
+    std::vector<cv::Vec3b> colors(objectsLabel.size() + 1);
+
+    for (size_t i = 0; i < objectsLabel.size(); i++)
+    {
+        colors[i] = cv::Vec3b(rand() & 255, rand() & 255, rand() & 255);
+    }
+
+    // Draw only the centermost region if one was found
+    for (size_t c = 0; c < objectsLabel.size(); c++)
+    {
+        // Assuming computeFeatures is correctly adapted for cv:: namespace as well.
+        int area = stats.at<int>(objectsLabel[c], cv::CC_STAT_AREA);
+        int x = stats.at<int>(objectsLabel[c], cv::CC_STAT_LEFT);
+        int y = stats.at<int>(objectsLabel[c], cv::CC_STAT_TOP);
+        int width = stats.at<int>(objectsLabel[c], cv::CC_STAT_WIDTH);
+        int height = stats.at<int>(objectsLabel[c], cv::CC_STAT_HEIGHT);
+
+        cv::Mat mask = cv::Mat::zeros(originalImg.size(), CV_8UC1);
+        for (int i = 0; i < mask.rows; i++)
+        {
+            uchar *maskptr = mask.ptr<uchar>(i);
+            for (int j = 0; j < mask.cols; j++)
+            {
+                if (labels.at<int>(i, j) == objectsLabel[c])
+                {
+                    maskptr[j] = 255;
+                }
+            }
+        }
+
+        auto featureMap = computeFeatureVector(mask, area, width, height, labels, objectsLabel[c]);
+        auto featureVector = convertFeatureMapToVector(featureMap, orderedFeatureKeys);
+        drawFeatures(originalImg, featureMap, mask, x, y);
+        // Placeholder for the nearest neighbor search
+        std::string closestLabel = "Unknown";
+        double closestDistance = std::numeric_limits<double>::max();
+
+        for (const auto &entry : database)
+        {
+            double distance = scaledEuclideanDistance(featureVector, entry.first, stdevs);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                closestLabel = entry.second;
+            }
+        }
+
+        // Label the detected object on the output image
+        // Assume x and y are the coordinates where you want to put the label
+        cv::putText(originalImg, closestLabel, cv::Point(x, y - 80), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
         // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
         for (int i = 0; i < originalImg.rows; i++)
         {
