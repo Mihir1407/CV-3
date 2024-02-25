@@ -1,3 +1,8 @@
+// objectRecogFunctions.cpp
+// Author: Mihir Chitre, Aditya Gurnani
+// Date: 02/24/2024
+// Description: This program is designed to process images for object recognition tasks. 
+//              It includes utilities for grayscale conversion, Gaussian blurring, K-means thresholding, and morphological operations.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -11,7 +16,13 @@
 #include "objectRecogFunctions.h"
 #include <corecrt_math_defines.h>
 
-// Utility function to convert a color image to grayscale
+/*
+   Function: convertToGrayscale
+   Purpose: Converts a color image to grayscale using a weighted sum method. The weights for the red, green, and blue channels are based on their perceived luminance.
+   Arguments:
+       src (const cv::Mat&) : The source color image.
+   Returns: cv::Mat : The converted grayscale image.
+*/
 cv::Mat convertToGrayscale(const cv::Mat &src)
 {
     CV_Assert(src.type() == CV_8UC3);
@@ -28,15 +39,30 @@ cv::Mat convertToGrayscale(const cv::Mat &src)
     return grayscale;
 }
 
-// Utility function for Gaussian Blur
+/*
+   Function: applyGaussianBlur
+   Purpose: Applies Gaussian Blur to the input image, smoothing it to reduce noise and details.
+   Arguments: 
+       src (const cv::Mat&) : The source image to be blurred.
+       kernelSize (int) : The size of the Gaussian kernel.
+       sigma (double) : The standard deviation of the Gaussian kernel in both X and Y direction.
+   Returns: cv::Mat : The blurred image.
+*/
 cv::Mat applyGaussianBlur(const cv::Mat &src, int kernelSize, double sigma)
 {
     cv::Mat blurred;
     cv::GaussianBlur(src, blurred, cv::Size(kernelSize, kernelSize), sigma, sigma);
-    return blurred; // Using OpenCV's GaussianBlur for demonstration; replace with custom implementation if needed.
-}
+    return blurred; 
+    }
 
-// Simple implementation of K-means for k=2 to find threshold
+/*
+   Function: kMeansThreshold
+   Purpose: Implements a simple K-means algorithm to find an optimal threshold for binarizing an image. 
+   Arguments:
+       src (const cv::Mat&) : The source grayscale image.
+       maxIterations (int) : The maximum number of iterations for the K-means algorithm.
+   Returns: int : The calculated threshold value.
+*/
 int kMeansThreshold(const cv::Mat &src, int maxIterations = 10)
 {
     std::vector<int> samples;
@@ -48,12 +74,10 @@ int kMeansThreshold(const cv::Mat &src, int maxIterations = 10)
         }
     }
 
-    // Initial guesses for centroids
     int centroid1 = 255, centroid2 = 0;
     for (int it = 0; it < maxIterations; ++it)
     {
         std::vector<int> cluster1, cluster2;
-        // Assign samples to nearest centroid
         for (int val : samples)
         {
             if (std::abs(val - centroid1) < std::abs(val - centroid2))
@@ -65,14 +89,20 @@ int kMeansThreshold(const cv::Mat &src, int maxIterations = 10)
                 cluster2.push_back(val);
             }
         }
-        // Update centroids
         centroid1 = cluster1.empty() ? centroid1 : std::accumulate(cluster1.begin(), cluster1.end(), 0) / cluster1.size();
         centroid2 = cluster2.empty() ? centroid2 : std::accumulate(cluster2.begin(), cluster2.end(), 0) / cluster2.size();
     }
-    return (centroid1 + centroid2) / 2; // Return the average of the two centroids as threshold
+    return (centroid1 + centroid2) / 2; 
 }
 
-// Function to apply thresholding
+/*
+   Function: applyThreshold
+   Purpose: Applies binary thresholding to an image based on a specified threshold value. 
+   Arguments:
+       src (const cv::Mat&) : The source image to be thresholded.
+       threshold (int) : The threshold value.
+   Returns: cv::Mat : The thresholded binary image.
+*/
 cv::Mat applyThreshold(const cv::Mat &src, int threshold)
 {
     cv::Mat thresholded(src.size(), src.type());
@@ -86,29 +116,34 @@ cv::Mat applyThreshold(const cv::Mat &src, int threshold)
     return thresholded;
 }
 
-// Main processing function
+/*
+   Function: processFrameForThreshold
+   Purpose: The purpose includes converting the frame to grayscale, applying Gaussian blur, determining an optimal threshold using K-means, and applying the threshold.
+   Arguments:
+       frame (const cv::Mat&) : The input frame to be processed.
+   Returns: cv::Mat : The processed frame ready for further analysis.
+*/
 cv::Mat processFrameForThreshold(const cv::Mat &frame)
 {
-    // Convert to grayscale
     cv::Mat grayscale = convertToGrayscale(frame);
-
-    // Apply Gaussian Blur
     cv::Mat blurred = applyGaussianBlur(grayscale, 5, 1.5); // Kernel size and sigma for Gaussian blur
-
-    // Find optimal threshold using K-Means
     int thresholdValue = kMeansThreshold(blurred);
-
-    // Apply threshold
     cv::Mat thresholded = applyThreshold(blurred, thresholdValue);
-
     return thresholded;
 }
 
-// Utility function for erosion
+/*
+   Function: applyErosion
+   Purpose: Applies morphological erosion to the input image, removes small white noises, detaches small islands of pixels, and shrink objects.
+   Arguments:
+       src (const cv::Mat&) : Input image on which erosion is applied.
+       kernelSize (int) : Size of the kernel used for erosion.
+   Returns: cv::Mat : The eroded output image.
+*/
 cv::Mat applyErosion(const cv::Mat &src, int kernelSize)
 {
     cv::Mat eroded(src.size(), src.type(), cv::Scalar::all(0));
-    int k = kernelSize / 2; // Kernel offset
+    int k = kernelSize / 2; 
     for (int i = k; i < src.rows - k; ++i)
     {
         for (int j = k; j < src.cols - k; ++j)
@@ -129,11 +164,18 @@ cv::Mat applyErosion(const cv::Mat &src, int kernelSize)
     return eroded;
 }
 
-// Utility function for dilation
+/*
+   Function: applyDilation
+   Purpose: Applies morphological dilation to the input image, which helps in accentuating features and joining broken parts of objects. 
+   Arguments:
+       src (const cv::Mat&) : Input image on which dilation is applied.
+       kernelSize (int) : Size of the kernel used for dilation.
+   Returns: cv::Mat : The dilated output image.
+*/
 cv::Mat applyDilation(const cv::Mat &src, int kernelSize)
 {
     cv::Mat dilated(src.size(), src.type(), cv::Scalar::all(0));
-    int k = kernelSize / 2; // Kernel offset
+    int k = kernelSize / 2; 
     for (int i = k; i < src.rows - k; ++i)
     {
         for (int j = k; j < src.cols - k; ++j)
@@ -154,27 +196,45 @@ cv::Mat applyDilation(const cv::Mat &src, int kernelSize)
     return dilated;
 }
 
-// Function to clean up the thresholded image
+/*
+   Function: cleanupBinaryImage
+   Purpose: Cleans up a binary image by applying erosion followed by dilation, known as opening. 
+   Arguments:
+       src (const cv::Mat&) : Input binary image to clean up.
+       erosionSize (int) : Size of the kernel used for erosion.
+       dilationSize (int) : Size of the kernel used for dilation.
+   Returns: cv::Mat : The cleaned-up output image.
+*/
 cv::Mat cleanupBinaryImage(const cv::Mat &src, int erosionSize = 3, int dilationSize = 3)
 {
-    // Apply erosion followed by dilation
     cv::Mat eroded = applyErosion(src, erosionSize);
     cv::Mat cleaned = applyDilation(eroded, dilationSize);
     return cleaned;
 }
 
+/*
+   Function: applyMorphologicalFilter
+   Purpose: Applies a morphological filter to the frame using processFrameForThreshold function, then cleaning up using cleanupBinaryImage function. 
+   Arguments:
+       frame (const cv::Mat&) : The frame to be processed.
+   Returns: cv::Mat : The output image after applying the morphological filter.
+*/
 cv::Mat applyMorphologicalFilter(const cv::Mat &frame)
 {
-
-    // Apply threshold
     cv::Mat thresholded = processFrameForThreshold(frame);
-
-    // Clean up the binary image
-    cv::Mat cleaned = cleanupBinaryImage(thresholded, 7, 7); // Example kernel sizes
-
+    cv::Mat cleaned = cleanupBinaryImage(thresholded, 7, 7);
     return cleaned;
 }
 
+/*
+   Function: UnionFind
+   Purpose: Implements the Union-Find algorithm, also known as the Disjoint Set Union algorithm, to track a set of elements partitioned into a number of disjoint subsets. 
+   Members:
+       parent (std::vector<int>) : Vector holding the parent of each node.
+   Methods:
+       find(int) : Finds the representative of the set that an element belongs to.
+       unite(int, int) : Merges two subsets into a single subset.
+*/
 struct UnionFind
 {
     std::vector<int> parent;
@@ -201,6 +261,15 @@ struct UnionFind
     }
 };
 
+/*
+   Function: findMinNeighborLabel
+   Purpose: Finds the minimum label among the neighbors of a given pixel in the labeled image. 
+   Arguments:
+       labels (const cv::Mat&) : The matrix containing labels of pixels.
+       i (int) : Row index of the current pixel.
+       j (int) : Column index of the current pixel.
+   Returns: int : The minimum label found among the neighbors.
+*/
 int findMinNeighborLabel(const cv::Mat &labels, int i, int j)
 {
     std::vector<int> neighbors;
@@ -214,6 +283,14 @@ int findMinNeighborLabel(const cv::Mat &labels, int i, int j)
     return *min_element(neighbors.begin(), neighbors.end());
 }
 
+/*
+   Function: applyConnectedComponents
+   Purpose: Labels connected components in a binary image. Pixels with the same label are connected and pixels with different labels are not connected.
+   Arguments:
+       src (const cv::Mat&) : Input binary image.
+       minSize (int) : Minimum size of components to retain.
+   Returns: cv::Mat : The output image with labeled connected components.
+*/
 cv::Mat applyConnectedComponents(const cv::Mat &src, int minSize)
 {
     cv::Mat labels = cv::Mat::zeros(src.size(), CV_32S);
@@ -226,7 +303,7 @@ cv::Mat applyConnectedComponents(const cv::Mat &src, int minSize)
         for (int j = 0; j < src.cols; ++j)
         {
             if (src.at<uchar>(i, j) == 255)
-            { // Assuming foreground is white
+            { 
                 int label = findMinNeighborLabel(labels, i, j);
                 if (label == 0)
                 {
@@ -234,7 +311,6 @@ cv::Mat applyConnectedComponents(const cv::Mat &src, int minSize)
                 }
                 else
                 {
-                    // Check for other neighbors and union labels if necessary
                     if (i > 0 && labels.at<int>(i - 1, j) > 0)
                         uf.unite(label, labels.at<int>(i - 1, j));
                     if (j > 0 && labels.at<int>(i, j - 1) > 0)
@@ -245,7 +321,6 @@ cv::Mat applyConnectedComponents(const cv::Mat &src, int minSize)
         }
     }
 
-    // Second Pass - Resolve labels
     for (int i = 0; i < labels.rows; ++i)
     {
         for (int j = 0; j < labels.cols; ++j)
@@ -256,7 +331,6 @@ cv::Mat applyConnectedComponents(const cv::Mat &src, int minSize)
         }
     }
 
-    // Count sizes and remove small components
     std::map<int, int> labelSizes;
     for (int i = 0; i < labels.rows; ++i)
     {
@@ -288,26 +362,37 @@ cv::Mat applyConnectedComponents(const cv::Mat &src, int minSize)
     return output;
 }
 
+/*
+   Function: applyConnectedComponentsAndDisplayRegions
+   Purpose: Applies connected components labeling to a binary image and filters out small regions.
+   Arguments:
+       frame (const cv::Mat&) : The frame to be processed.
+   Returns: cv::Mat : The output image with labeled and filtered connected components.
+*/
 cv::Mat applyConnectedComponentsAndDisplayRegions(const cv::Mat &frame)
 {
-    cv::Mat cleaned = applyMorphologicalFilter(frame); // Adjust kernel sizes as needed
-
-    // Step 2: Apply Connected Components Labeling and Filter Small Regions
-    // This step replaces the direct return of the cleaned image with the segmentation and visualization process.
-    cv::Mat labeledRegions = applyConnectedComponents(cleaned, 50); // Example minSize = 50; adjust as needed
+    cv::Mat cleaned = applyMorphologicalFilter(frame); 
+    cv::Mat labeledRegions = applyConnectedComponents(cleaned, 50); 
 
     return labeledRegions;
 }
 
+/*
+   Function: displayConnectedComponents
+   Purpose: Visualizes the connected components of a binary image by assigning a unique color to each component. 
+   Arguments:
+       img (const cv::Mat&) : Input binary image.
+       sizeThreshold (int) : Minimum size of components to display.
+   Returns: cv::Mat : The output image with colored connected components.
+*/
 cv::Mat displayConnectedComponents(const cv::Mat &img, int sizeThreshold = 100)
 {
     cv::Mat labels, stats, centroids;
     int nLabels = cv::connectedComponentsWithStats(img, labels, stats, centroids, 8, CV_32S);
 
-    static std::map<int, cv::Vec3b> labelColors; // Map to store colors for labels
-    labelColors.clear();                         // Clear previous frame's data
+    static std::map<int, cv::Vec3b> labelColors; 
+    labelColors.clear();                         
 
-    // Assign colors to labels, skipping small regions
     for (int label = 1; label < nLabels; ++label)
     {
         int area = stats.at<int>(label, cv::CC_STAT_AREA);
@@ -338,6 +423,14 @@ cv::Mat displayConnectedComponents(const cv::Mat &img, int sizeThreshold = 100)
     return dst;
 }
 
+/*
+   Function: drawOrientedBoundingBox
+   Purpose: Draws an oriented bounding box around the white pixels in a binary mask. 
+   Arguments:
+       mask (const cv::Mat&) : Input binary mask where the object is white.
+       output (cv::Mat&) : The image on which the oriented bounding box will be drawn.
+   Returns: void
+*/
 void drawOrientedBoundingBox(const cv::Mat &mask, cv::Mat &output)
 {
     std::vector<cv::Point> points;
@@ -346,7 +439,7 @@ void drawOrientedBoundingBox(const cv::Mat &mask, cv::Mat &output)
         for (int x = 0; x < mask.cols; x++)
         {
             if (mask.at<uchar>(y, x) == 255)
-            { // Assuming mask is a binary image
+            { 
                 points.push_back(cv::Point(x, y));
             }
         }
@@ -359,6 +452,14 @@ void drawOrientedBoundingBox(const cv::Mat &mask, cv::Mat &output)
         cv::line(output, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 0, 255), 2);
 }
 
+/*
+   Function: drawAxisOfLeastCentralMoment
+   Purpose: Draws the axis of least inertia for an object in a binary mask, for understanding the object's orientation.
+   Arguments:
+       mask (const cv::Mat&) : Input binary mask where the object is white.
+       output (cv::Mat&) : The image on which the axis will be drawn.
+   Returns: void
+*/
 void drawAxisOfLeastCentralMoment(const cv::Mat &mask, cv::Mat &output)
 {
     std::vector<cv::Point> points;
@@ -367,16 +468,15 @@ void drawAxisOfLeastCentralMoment(const cv::Mat &mask, cv::Mat &output)
         for (int x = 0; x < mask.cols; x++)
         {
             if (mask.at<uchar>(y, x) == 255)
-            { // Assuming mask is a binary image
+            { 
                 points.push_back(cv::Point(x, y));
             }
         }
     }
 
     if (points.empty())
-        return; // Add a check to avoid PCA on empty data
+        return; 
 
-    // Convert points to Mat of type CV_32F because PCA expects float type
     cv::Mat data = cv::Mat(points.size(), 2, CV_32F);
     for (size_t i = 0; i < points.size(); ++i)
     {
@@ -384,20 +484,25 @@ void drawAxisOfLeastCentralMoment(const cv::Mat &mask, cv::Mat &output)
         data.at<float>(i, 1) = points[i].y;
     }
 
-    // Perform PCA
     cv::PCA pca(data, cv::Mat(), cv::PCA::DATA_AS_ROW);
-
-    // Accessing the PCA results correctly
     cv::Point2f center(pca.mean.at<float>(0), pca.mean.at<float>(1));
-    cv::Vec2f eigenvector = pca.eigenvectors.at<float>(0); // Access the first eigenvector
-
-    // Scale the eigenvector for visualization, adjusting the scale factor as needed
+    cv::Vec2f eigenvector = pca.eigenvectors.at<float>(0); 
     cv::Point endpoint = center + cv::Point2f(eigenvector[0] * 100, eigenvector[1] * 100);
-
-    // Draw the axis of least central moment
     cv::line(output, center, endpoint, cv::Scalar(255, 0, 0), 2);
 }
 
+/*
+   Function: computeFeatureVector
+   Purpose: Computes a feature vector for an object in a binary mask. 
+   Arguments:
+       mask (const cv::Mat&) : Input binary mask of the object.
+       area (const int) : The area of the object.
+       width (const int) : The width of the bounding box of the object.
+       height (const int) : The height of the bounding box of the object.
+       labels (const cv::Mat&) : The labeled image containing the object.
+       objectLabel (const int) : The label of the object in the labeled image.
+   Returns: std::unordered_map<std::string, double> : The computed feature vector.
+*/
 std::unordered_map<std::string, double> computeFeatureVector(const cv::Mat &mask, const int area, const int width, const int height, const cv::Mat &labels, const int objectLabel)
 {
     std::unordered_map<std::string, double> featureMap;
@@ -409,14 +514,13 @@ std::unordered_map<std::string, double> computeFeatureVector(const cv::Mat &mask
     featureMap["percentFilled"] = percentFilled;
     featureMap["aspectRatio"] = aspectRatio;
 
-    // Calculating perimeter and other features
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(mask.clone(), contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
     double perimeter = 0;
     if (!contours.empty())
     {
-        perimeter = cv::arcLength(contours[0], true); // Assuming single object for simplicity
+        perimeter = cv::arcLength(contours[0], true); 
     }
 
     double circularity = (4 * M_PI * area) / (perimeter * perimeter);
@@ -425,7 +529,6 @@ std::unordered_map<std::string, double> computeFeatureVector(const cv::Mat &mask
     featureMap["circularity"] = circularity;
     featureMap["compactness"] = compactness;
 
-    // Calculating Hu Moments for rotation and scale invariance
     cv::Moments objMoments = cv::moments(mask, true);
     double huMoments[7];
     cv::HuMoments(objMoments, huMoments);
@@ -438,6 +541,17 @@ std::unordered_map<std::string, double> computeFeatureVector(const cv::Mat &mask
     return featureMap;
 }
 
+/*
+   Function: drawFeatures
+   Purpose: Draws the calculated features on the output image for visualization.
+   Arguments:
+       output (cv::Mat&) : The image on which features will be drawn.
+       featureMap (const std::unordered_map<std::string, double>&) : The feature vector of the object.
+       mask (const cv::Mat&) : The binary mask of the object.
+       x (const int) : The x-coordinate of the top-left corner of the object's bounding box.
+       y (const int) : The y-coordinate of the top-left corner of the object's bounding box.
+   Returns: void
+*/
 void drawFeatures(cv::Mat &output, const std::unordered_map<std::string, double> &featureMap, const cv::Mat &mask, const int x, const int y)
 {
     cv::putText(output, cv::format("Circularity: %.2f, Compactness: %.2f", featureMap.at("circularity"), featureMap.at("compactness")),
@@ -453,12 +567,20 @@ void drawFeatures(cv::Mat &output, const std::unordered_map<std::string, double>
     drawAxisOfLeastCentralMoment(mask, output);
 }
 
+/*
+   Function: findRegions
+   Purpose: Identifies and analyzes regions in a binary image. 
+   Arguments:
+       binaryImage (const cv::Mat&) : Input binary image.
+       output (cv::Mat&) : The image where regions will be visualized.
+       originalImg (cv::Mat&) : The original image for reference.
+       minRegionSize (int) : The minimum size of regions to consider.
+   Returns: void
+*/
 void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
 {
     cv::Mat invertedImg;
     cv::bitwise_not(binaryImage, invertedImg);
-
-    // Perform connected components analysis on the inverted image
     cv::Mat labels, stats, centroids;
     int nLabels = cv::connectedComponentsWithStats(invertedImg, labels, stats, centroids, 8, CV_32S);
 
@@ -473,18 +595,15 @@ void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalI
     std::vector<int> objectsLabel;
     double minDistanceToCenter = std::numeric_limits<double>::max();
 
-    // Iterate through all regions to find the centermost one
     for (int i = 1; i < nLabels; i++)
     {
         int area = stats.at<int>(i, cv::CC_STAT_AREA);
 
-        // Only consider regions larger than the minimum size
         if (area > minRegionSize)
         {
             cv::Point centroid = cv::Point(static_cast<int>(centroids.at<double>(i, 0)),
                                            static_cast<int>(centroids.at<double>(i, 1)));
 
-            // Compute the Euclidean distance from the centroid to the image center
             double distance = cv::norm(centroid - imageCenter);
 
             if (centerArea.contains(centroid))
@@ -501,10 +620,8 @@ void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalI
         colors[i] = cv::Vec3b(rand() & 255, rand() & 255, rand() & 255);
     }
 
-    // Draw only the centermost region if one was found
     for (size_t c = 0; c < objectsLabel.size(); c++)
     {
-        // Assuming computeFeatures is correctly adapted for cv:: namespace as well.
         int area = stats.at<int>(objectsLabel[c], cv::CC_STAT_AREA);
         int x = stats.at<int>(objectsLabel[c], cv::CC_STAT_LEFT);
         int y = stats.at<int>(objectsLabel[c], cv::CC_STAT_TOP);
@@ -526,7 +643,6 @@ void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalI
 
         auto featureMap = computeFeatureVector(mask, area, width, height, labels, objectsLabel[c]);
         drawFeatures(output, featureMap, mask, x, y);
-        // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
         for (int i = 0; i < originalImg.rows; i++)
         {
             for (int j = 0; j < originalImg.cols; j++)
@@ -540,32 +656,39 @@ void findRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalI
     }
 }
 
+/*
+   Function: saveFeatureVectorToCSV
+   Purpose: Saves the computed feature vector of an object along with its label to a CSV file. 
+   Arguments:
+       featureMap (const std::unordered_map<std::string, double>&) : The feature vector to save.
+       label (const std::string&) : The label of the object.
+   Returns: void
+*/
 void saveFeatureVectorToCSV(const std::unordered_map<std::string, double> &featureMap, const std::string &label)
 {
-    std::ofstream file("feature_vectors.csv", std::ios::app); // Open in append mode
+    std::ofstream file("feature_vectors.csv", std::ios::app); 
     if (file.is_open())
     {
-        // Define the order of features as they should appear in the CSV
         std::vector<std::string> orderedFeatureKeys = {
             "area", "percentFilled", "aspectRatio", "circularity", "compactness",
             "HuMoment 0", "HuMoment 1", "HuMoment 2", "HuMoment 3",
             "HuMoment 4", "HuMoment 5", "HuMoment 6"};
 
-        file << label; // Write label first
+        file << label; 
 
         for (const auto &key : orderedFeatureKeys)
         {
             if (featureMap.find(key) != featureMap.end())
-            {                                      // Check if the key exists in the map
-                file << "," << featureMap.at(key); // Write feature value preceded by comma
+            {                                      
+                file << "," << featureMap.at(key); 
             }
             else
             {
-                file << ","; // If the feature does not exist, write a placeholder (empty value)
+                file << ","; 
             }
         }
 
-        file << "\n"; // End of line
+        file << "\n"; 
         file.close();
     }
     else
@@ -574,12 +697,21 @@ void saveFeatureVectorToCSV(const std::unordered_map<std::string, double> &featu
     }
 }
 
+/*
+   Function: findRegionsAndStoreToCsv
+   Purpose: Identifies regions in a binary image, computes feature vectors, prompts for labels, and stores the feature vectors along with labels to a CSV file. 
+   Arguments:
+       binaryImage (const cv::Mat&) : Input binary image.
+       output (cv::Mat&) : The image where regions will be visualized.
+       originalImg (cv::Mat&) : The original image for reference.
+       minRegionSize (int) : The minimum size of regions to consider.
+   Returns: void
+*/
 void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
 {
     cv::Mat invertedImg;
     cv::bitwise_not(binaryImage, invertedImg);
 
-    // Perform connected components analysis on the inverted image
     cv::Mat labels, stats, centroids;
     int nLabels = cv::connectedComponentsWithStats(invertedImg, labels, stats, centroids, 8, CV_32S);
 
@@ -594,18 +726,14 @@ void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::M
     std::vector<int> objectsLabel;
     double minDistanceToCenter = std::numeric_limits<double>::max();
 
-    // Iterate through all regions to find the centermost one
     for (int i = 1; i < nLabels; i++)
     {
         int area = stats.at<int>(i, cv::CC_STAT_AREA);
-
-        // Only consider regions larger than the minimum size
         if (area > minRegionSize)
         {
             cv::Point centroid = cv::Point(static_cast<int>(centroids.at<double>(i, 0)),
                                            static_cast<int>(centroids.at<double>(i, 1)));
 
-            // Compute the Euclidean distance from the centroid to the image center
             double distance = cv::norm(centroid - imageCenter);
 
             if (centerArea.contains(centroid))
@@ -622,10 +750,8 @@ void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::M
         colors[i] = cv::Vec3b(rand() & 255, rand() & 255, rand() & 255);
     }
 
-    // Draw only the centermost region if one was found
     for (size_t c = 0; c < objectsLabel.size(); c++)
     {
-        // Assuming computeFeatures is correctly adapted for cv:: namespace as well.
         int area = stats.at<int>(objectsLabel[c], cv::CC_STAT_AREA);
         int x = stats.at<int>(objectsLabel[c], cv::CC_STAT_LEFT);
         int y = stats.at<int>(objectsLabel[c], cv::CC_STAT_TOP);
@@ -646,16 +772,11 @@ void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::M
         }
 
         auto featureMap = computeFeatureVector(mask, area, width, height, labels, objectsLabel[c]);
-        // Prompt for label input
-        // Prompt for label input
         std::string label;
         std::cout << "Enter label for the detected object: ";
-        std::cin >> label; // Consider adding error handling for cin
-
-        // Save the feature vector and label to CSV
+        std::cin >> label;
         saveFeatureVectorToCSV(featureMap, label);
         drawFeatures(output, featureMap, mask, x, y);
-        // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
         for (int i = 0; i < originalImg.rows; i++)
         {
             for (int j = 0; j < originalImg.cols; j++)
@@ -669,24 +790,30 @@ void findRegionsAndStoreToCsv(const cv::Mat &binaryImage, cv::Mat &output, cv::M
     }
 }
 
-// Function to load feature vectors and their labels from a CSV file
+/*
+   Function: loadFeatureVectorsAndLabels
+   Purpose: Loads feature vectors and their corresponding labels from a CSV file. 
+   Arguments:
+       fileName (const std::string&) : The name of the CSV file to load from.
+   Returns: std::vector<std::pair<std::vector<double>, std::string>> : The loaded dataset.
+*/
 std::vector<std::pair<std::vector<double>, std::string>> loadFeatureVectorsAndLabels(const std::string &fileName)
 {
     std::vector<std::pair<std::vector<double>, std::string>> database;
-    std::ifstream file(fileName); // Use the fileName argument to open the file
+    std::ifstream file(fileName); 
     std::string line;
 
     if (!file.is_open())
     {
         std::cerr << "Error opening file: " << fileName << std::endl;
-        return database; // Return an empty database if the file cannot be opened
+        return database;
     }
 
     while (std::getline(file, line))
     {
         std::istringstream iss(line);
         std::string label;
-        std::getline(iss, label, ','); // First entry is the label
+        std::getline(iss, label, ','); 
 
         std::vector<double> features;
         std::string value;
@@ -701,7 +828,14 @@ std::vector<std::pair<std::vector<double>, std::string>> loadFeatureVectorsAndLa
     return database;
 }
 
-// Helper function to convert featureMap to vector<double> in the specified order
+/*
+   Function: convertFeatureMapToVector
+   Purpose: Converts a feature map (unordered_map) to a vector in a specified order. 
+   Arguments:
+       featureMap (const std::unordered_map<std::string, double>&) : The feature map to convert.
+       orderedFeatureKeys (const std::vector<std::string>&) : The order in which features should appear in the vector.
+   Returns: std::vector<double> : The ordered feature vector.
+*/
 std::vector<double> convertFeatureMapToVector(const std::unordered_map<std::string, double> &featureMap, const std::vector<std::string> &orderedFeatureKeys)
 {
     std::vector<double> featureVector;
@@ -713,12 +847,19 @@ std::vector<double> convertFeatureMapToVector(const std::unordered_map<std::stri
         }
         else
         {
-            featureVector.push_back(0.0); // Consider how to handle missing values appropriately
+            featureVector.push_back(0.0); 
         }
     }
     return featureVector;
 }
 
+/*
+   Function: calculateStandardDeviations
+   Purpose: Calculates the standard deviations of features across a dataset. 
+   Arguments:
+       database (const std::vector<std::pair<std::vector<double>, std::string>>&) : The dataset to analyze.
+   Returns: std::vector<double> : The standard deviations of each feature across the dataset.
+*/
 std::vector<double> calculateStandardDeviations(const std::vector<std::pair<std::vector<double>, std::string>> &database)
 {
     if (database.empty())
@@ -728,7 +869,6 @@ std::vector<double> calculateStandardDeviations(const std::vector<std::pair<std:
     std::vector<double> means(numFeatures, 0.0);
     std::vector<double> stdevs(numFeatures, 0.0);
 
-    // Calculate means
     for (const auto &entry : database)
     {
         for (size_t i = 0; i < numFeatures; ++i)
@@ -739,7 +879,6 @@ std::vector<double> calculateStandardDeviations(const std::vector<std::pair<std:
     for (double &mean : means)
         mean /= database.size();
 
-    // Calculate standard deviations
     for (const auto &entry : database)
     {
         for (size_t i = 0; i < numFeatures; ++i)
@@ -753,14 +892,22 @@ std::vector<double> calculateStandardDeviations(const std::vector<std::pair<std:
     return stdevs;
 }
 
-// Modified distance function to include standard deviation scaling
+/*
+   Function: scaledEuclideanDistance
+   Purpose: Calculates the scaled Euclidean distance between two feature vectors, taking into account the standard deviation of each feature. 
+   Arguments:
+       vec1 (const std::vector<double>&) : The first feature vector.
+       vec2 (const std::vector<double>&) : The second feature vector.
+       stdevs (const std::vector<double>&) : The standard deviations of each feature, used for scaling.
+   Returns: double : The scaled Euclidean distance between the two vectors.
+*/
 double scaledEuclideanDistance(const std::vector<double> &vec1, const std::vector<double> &vec2, const std::vector<double> &stdevs)
 {
     double distance = 0.0;
     for (size_t i = 0; i < vec1.size(); ++i)
     {
         if (stdevs[i] > 0)
-        { // Prevent division by zero
+        {
             double scaledDiff = (vec1[i] - vec2[i]) / stdevs[i];
             distance += scaledDiff * scaledDiff;
         }
@@ -768,12 +915,20 @@ double scaledEuclideanDistance(const std::vector<double> &vec1, const std::vecto
     return std::sqrt(distance);
 }
 
+/*
+   Function: classifyAndLabelRegions
+   Purpose: Classifies and labels regions in a binary image based on a dataset of feature vectors and labels. 
+   Arguments:
+       binaryImage (const cv::Mat&) : Input binary image.
+       output (cv::Mat&) : The image where labeled regions will be visualized.
+       originalImg (cv::Mat&) : The original image for reference.
+       minRegionSize (int) : The minimum size of regions to consider for classification.
+   Returns: std::string : The label of the classified region.
+*/
 std::string classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
 {
-    // Load the database of feature vectors and labels
     auto database = loadFeatureVectorsAndLabels("feature_vectors.csv");
     auto stdevs = calculateStandardDeviations(database);
-    // Specify the order of features
     std::vector<std::string> orderedFeatureKeys = {
         "area", "percentFilled", "aspectRatio", "circularity", "compactness",
         "HuMoment 0", "HuMoment 1", "HuMoment 2", "HuMoment 3",
@@ -782,7 +937,6 @@ std::string classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output,
     cv::Mat invertedImg;
     cv::bitwise_not(binaryImage, invertedImg);
 
-    // Perform connected components analysis on the inverted image
     cv::Mat labels, stats, centroids;
     int nLabels = cv::connectedComponentsWithStats(invertedImg, labels, stats, centroids, 8, CV_32S);
 
@@ -792,24 +946,19 @@ std::string classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output,
 
     int centerAreaSize = std::min(originalImg.cols, originalImg.rows) / 3;
     cv::Rect centerArea(imageCenter.x - centerAreaSize, imageCenter.y - centerAreaSize, centerAreaSize * 2, centerAreaSize * 2);
-    // cv::rectangle(originalImg, centerArea, cv::Scalar(255, 255, 0), 2);
 
     std::vector<int> objectsLabel;
     double minDistanceToCenter = std::numeric_limits<double>::max();
-    // Placeholder for the nearest neighbor search
     std::string closestLabel = "Unknown";
-    // Iterate through all regions to find the centermost one
     for (int i = 1; i < nLabels; i++)
     {
         int area = stats.at<int>(i, cv::CC_STAT_AREA);
 
-        // Only consider regions larger than the minimum size
         if (area > minRegionSize)
         {
             cv::Point centroid = cv::Point(static_cast<int>(centroids.at<double>(i, 0)),
                                            static_cast<int>(centroids.at<double>(i, 1)));
 
-            // Compute the Euclidean distance from the centroid to the image center
             double distance = cv::norm(centroid - imageCenter);
 
             if (centerArea.contains(centroid))
@@ -826,10 +975,8 @@ std::string classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output,
         colors[i] = cv::Vec3b(rand() & 255, rand() & 255, rand() & 255);
     }
 
-    // Draw only the centermost region if one was found
     for (size_t c = 0; c < objectsLabel.size(); c++)
     {
-        // Assuming computeFeatures is correctly adapted for cv:: namespace as well.
         int area = stats.at<int>(objectsLabel[c], cv::CC_STAT_AREA);
         int x = stats.at<int>(objectsLabel[c], cv::CC_STAT_LEFT);
         int y = stats.at<int>(objectsLabel[c], cv::CC_STAT_TOP);
@@ -865,10 +1012,7 @@ std::string classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output,
             }
         }
 
-        // Label the detected object on the output image
-        // Assume x and y are the coordinates where you want to put the label
         cv::putText(originalImg, closestLabel, cv::Point(x, y - 80), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
-        // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
         for (int i = 0; i < originalImg.rows; i++)
         {
             for (int j = 0; j < originalImg.cols; j++)
@@ -883,12 +1027,21 @@ std::string classifyAndLabelRegions(const cv::Mat &binaryImage, cv::Mat &output,
     return closestLabel;
 }
 
+/*
+   Function: classifyWithKNN
+   Purpose: Classifies a test vector using the k-Nearest Neighbors algorithm based on a dataset of feature vectors and labels.
+   Arguments:
+       testVector (const std::vector<double>&) : The feature vector to classify.
+       database (const std::vector<std::pair<std::vector<double>, std::string>>&) : The dataset of feature vectors and labels.
+       K (int) : The number of nearest neighbors to consider in the classification.
+       stdevs (const std::vector<double>&) : The standard deviations of each feature, used for scaling distances.
+   Returns: std::string : The predicted label for the test vector.
+*/
 std::string classifyWithKNN(const std::vector<double> &testVector,
                             const std::vector<std::pair<std::vector<double>, std::string>> &database,
                             int K,
                             const std::vector<double> &stdevs)
 {
-    // Calculate distances
     std::vector<std::pair<double, std::string>> labeledDistances;
     for (const auto &entry : database)
     {
@@ -896,17 +1049,14 @@ std::string classifyWithKNN(const std::vector<double> &testVector,
         labeledDistances.push_back({distance, entry.second});
     }
 
-    // Sort by distance
     std::sort(labeledDistances.begin(), labeledDistances.end());
 
-    // Aggregate distances by class, up to K nearest neighbors
     std::map<std::string, std::vector<double>> classDistances;
     for (int i = 0; i < K && i < labeledDistances.size(); ++i)
     {
         classDistances[labeledDistances[i].second].push_back(labeledDistances[i].first);
     }
 
-    // Calculate average distance for each class and find the class with the smallest average distance
     std::string closestClass = "";
     double smallestAvgDistance = std::numeric_limits<double>::max();
     for (const auto &pair : classDistances)
@@ -922,12 +1072,20 @@ std::string classifyWithKNN(const std::vector<double> &testVector,
     return closestClass;
 }
 
-void classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
+/*
+   Function: classifyAndLabelRegionsKNN
+   Purpose: Identifies, classifies, and labels regions in a binary image using the k-Nearest Neighbors algorithm. 
+   Arguments:
+       binaryImage (const cv::Mat&) : Input binary image.
+       output (cv::Mat&) : The image where labeled regions will be visualized.
+       originalImg (cv::Mat&) : The original image for reference.
+       minRegionSize (int) : The minimum size of regions to consider for classification.
+   Returns: std::string : The predicted label.
+*/
+std::string classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv::Mat &originalImg, int minRegionSize)
 {
-    // Load the database of feature vectors and labels
     auto database = loadFeatureVectorsAndLabels("feature_vectors.csv");
     auto stdevs = calculateStandardDeviations(database);
-    // Specify the order of features
     std::vector<std::string> orderedFeatureKeys = {
         "area", "percentFilled", "aspectRatio", "circularity", "compactness",
         "HuMoment 0", "HuMoment 1", "HuMoment 2", "HuMoment 3",
@@ -936,7 +1094,6 @@ void classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv:
     cv::Mat invertedImg;
     cv::bitwise_not(binaryImage, invertedImg);
 
-    // Perform connected components analysis on the inverted image
     cv::Mat labels, stats, centroids;
     int nLabels = cv::connectedComponentsWithStats(invertedImg, labels, stats, centroids, 8, CV_32S);
 
@@ -946,23 +1103,19 @@ void classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv:
 
     int centerAreaSize = std::min(originalImg.cols, originalImg.rows) / 3;
     cv::Rect centerArea(imageCenter.x - centerAreaSize, imageCenter.y - centerAreaSize, centerAreaSize * 2, centerAreaSize * 2);
-    // cv::rectangle(originalImg, centerArea, cv::Scalar(255, 255, 0), 2);
 
     std::vector<int> objectsLabel;
     double minDistanceToCenter = std::numeric_limits<double>::max();
-
-    // Iterate through all regions to find the centermost one
+    std::string label = "unknown";
     for (int i = 1; i < nLabels; i++)
     {
         int area = stats.at<int>(i, cv::CC_STAT_AREA);
 
-        // Only consider regions larger than the minimum size
         if (area > minRegionSize)
         {
             cv::Point centroid = cv::Point(static_cast<int>(centroids.at<double>(i, 0)),
                                            static_cast<int>(centroids.at<double>(i, 1)));
 
-            // Compute the Euclidean distance from the centroid to the image center
             double distance = cv::norm(centroid - imageCenter);
 
             if (centerArea.contains(centroid))
@@ -979,10 +1132,8 @@ void classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv:
         colors[i] = cv::Vec3b(rand() & 255, rand() & 255, rand() & 255);
     }
 
-    // Draw only the centermost region if one was found
     for (size_t c = 0; c < objectsLabel.size(); c++)
     {
-        // Assuming computeFeatures is correctly adapted for cv:: namespace as well.
         int area = stats.at<int>(objectsLabel[c], cv::CC_STAT_AREA);
         int x = stats.at<int>(objectsLabel[c], cv::CC_STAT_LEFT);
         int y = stats.at<int>(objectsLabel[c], cv::CC_STAT_TOP);
@@ -1005,13 +1156,8 @@ void classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv:
         auto featureMap = computeFeatureVector(mask, area, width, height, labels, objectsLabel[c]);
         auto featureVector = convertFeatureMapToVector(featureMap, orderedFeatureKeys);
         drawFeatures(originalImg, featureMap, mask, x, y);
-        // Placeholder for the nearest neighbor search
-        // Using classifyWithKNN to determine the label of the current region
         std::string label = classifyWithKNN(featureVector, database, 3, stdevs);
-        // Label the detected object on the output image
-        // Assume x and y are the coordinates where you want to put the label
         cv::putText(originalImg, label, cv::Point(x, y - 80), cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 255, 0), 2);
-        // computeFeatures(originalImg, output, objectsLabel[c], labels, stats, centroids);
         for (int i = 0; i < originalImg.rows; i++)
         {
             for (int j = 0; j < originalImg.cols; j++)
@@ -1023,8 +1169,20 @@ void classifyAndLabelRegionsKNN(const cv::Mat &binaryImage, cv::Mat &output, cv:
             }
         }
     }
+    return label;
 }
 
+/*
+   Function: getEmbedding
+   Purpose: Extracts feature embeddings from a specified region of an image using a pre-trained deep learning model. 
+   Arguments:
+       src (cv::Mat&) : The source image from which embeddings are extracted.
+       embedding (cv::Mat&) : The output matrix where the extracted embeddings will be stored.
+       bbox (cv::Rect&) : The bounding box specifying the region of interest in the source image.
+       net (cv::dnn::Net&) : The pre-trained deep learning model used for feature extraction.
+       debug (int) : Debug flag to enable visualization and printing of intermediate results.
+   Returns: int : Status code (0 for success).
+*/
 int getEmbedding(cv::Mat &src, cv::Mat &embedding, cv::Rect &bbox, cv::dnn::Net &net, int debug)
 {
     const int ORNet_size = 128;
@@ -1040,14 +1198,14 @@ int getEmbedding(cv::Mat &src, cv::Mat &embedding, cv::Rect &bbox, cv::dnn::Net 
     cv::copyMakeBorder(roiImg, padImg, top, bottom, left, right, cv::BORDER_CONSTANT, 0);
     cv::resize(padImg, padImg, cv::Size(128, 128));
 
-    cv::dnn::blobFromImage(src,                              // input image
-                           blob,                             // output array
-                           (1.0 / 255.0) / 0.5,              // scale factor
-                           cv::Size(ORNet_size, ORNet_size), // resize the image to this
-                           128,                              // subtract mean prior to scaling
-                           false,                            // input is a single channel image
-                           true,                             // center crop after scaling short side to size
-                           CV_32F);                          // output depth/type
+    cv::dnn::blobFromImage(src,                              
+                           blob,                             
+                           (1.0 / 255.0) / 0.5,              
+                           cv::Size(ORNet_size, ORNet_size), 
+                           128,                              
+                           false,                            
+                           true,                             
+                           CV_32F);                          
 
     net.setInput(blob);
     embedding = net.forward("onnx_node!/fc1/Gemm");
